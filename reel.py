@@ -119,11 +119,14 @@ def overlays(title, price, features, cta):
 
     if price:
         def price_layer(d, price=vis(price)):
-            pf = font(96)
+            size = 96
+            while size > 48 and d.textlength(price, font=font(size)) > W - 220:  # long text like "ask in DM"
+                size -= 4
+            pf = font(size)
             tw = d.textlength(price, font=pf)
             x, y = (W - tw - 100) / 2, 1580
             d.rounded_rectangle([x, y, x + tw + 100, y + 140], radius=70, fill=ACCENT)
-            d.text((x + 50, y + 12), price, font=pf, fill=(20, 12, 5))
+            d.text((x + 50, y + 70), price, font=pf, fill=(20, 12, 5), anchor="lm")
         out.append((layer(price_layer), 2.0 + len(features[:4]) * 0.9 + 0.4))
 
     if cta:
