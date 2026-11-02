@@ -1,0 +1,77 @@
+{
+  "name": "Product photo → promo Reel",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Make a product Reel",
+        "formDescription": "Upload one product photo and a few words. You get a 1080×1920 promo video back in about 10 seconds.",
+        "formFields": {
+          "values": [
+            {"fieldLabel": "Product photo", "fieldType": "file", "multipleFiles": false, "acceptFileTypes": ".jpg, .jpeg, .png, .webp", "requiredField": true},
+            {"fieldLabel": "Title", "placeholder": "Surface Laptop 5 - Like New", "requiredField": true},
+            {"fieldLabel": "Price", "placeholder": "$649"},
+            {"fieldLabel": "Features", "fieldType": "textarea", "placeholder": "One per line, up to 4"},
+            {"fieldLabel": "Call to action", "placeholder": "DM us to order"}
+          ]
+        },
+        "options": {"appendAttribution": false, "buttonLabel": "Make my Reel"}
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000001",
+      "name": "Product form",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.3,
+      "position": [0, 0],
+      "webhookId": "5f1d6c2e-7a0b-4e8a-9a51-2c4b7f0e9d11"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Turn the form answers and the uploaded photo into the JSON body the reel service expects.\nconst item = $input.first();\nconst key = Object.keys(item.binary || {})[0];\nif (!key) throw new Error('No photo was uploaded');\nconst photo = await this.helpers.getBinaryDataBuffer(0, key);\nconst f = item.json;\nreturn [{ json: {\n  image_base64: photo.toString('base64'),\n  title: f['Title'],\n  price: f['Price'] || '',\n  features: f['Features'] || '',\n  cta: f['Call to action'] || ''\n} }];"
+      },
+      "id": "a1b2c3d4-0002-4000-8000-000000000002",
+      "name": "Build request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8777/reel",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "response": {"response": {"responseFormat": "file", "outputPropertyName": "data"}},
+          "timeout": 120000
+        }
+      },
+      "id": "a1b2c3d4-0003-4000-8000-000000000003",
+      "name": "Render Reel",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 0]
+    },
+    {
+      "parameters": {
+        "operation": "completion",
+        "respondWith": "returnBinary",
+        "completionTitle": "Your Reel is ready",
+        "completionMessage": "The download starts automatically.",
+        "inputDataFieldName": "data"
+      },
+      "id": "a1b2c3d4-0004-4000-8000-000000000004",
+      "name": "Send the video",
+      "type": "n8n-nodes-base.form",
+      "typeVersion": 1,
+      "position": [720, 0],
+      "webhookId": "8c2e4f6a-1b3d-4c5e-8f70-9a1b2c3d4e5f"
+    }
+  ],
+  "connections": {
+    "Product form": {"main": [[{"node": "Build request", "type": "main", "index": 0}]]},
+    "Build request": {"main": [[{"node": "Render Reel", "type": "main", "index": 0}]]},
+    "Render Reel": {"main": [[{"node": "Send the video", "type": "main", "index": 0}]]}
+  },
+  "settings": {"executionOrder": "v1"},
+  "pinData": {}
+}
