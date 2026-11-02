@@ -11,6 +11,7 @@ import base64
 import io
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -19,6 +20,12 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
+
+try:  # Persian/Arabic text: Pillow without libraqm needs the letters joined and reordered by hand
+    import arabic_reshaper
+    from bidi.algorithm import get_display
+except ImportError:
+    arabic_reshaper = None
 
 W, H, FPS = 1080, 1920, 30
 SECONDS = 11
@@ -42,11 +49,21 @@ def font(size):
     return ImageFont.load_default(size)
 
 
+RTL = re.compile("[؀-ۿ]")
+
+
+def vis(text):
+    """The line as it should be drawn: right-to-left scripts joined and ordered for display."""
+    if arabic_reshaper and RTL.search(text):
+        return get_display(arabic_reshaper.reshape(text))
+    return text
+
+
 def wrap(draw, text, f, width):
     lines, cur = [], ""
     for word in text.split():
         trial = f"{cur} {word}".strip()
-        if draw.textlength(trial, font=f) <= width or not cur:
+        if draw.textlength(vis(trial), font=f) <= width or not cur:
             cur = trial
         else:
             lines.append(cur)
@@ -69,7 +86,7 @@ def background(photo):
 def foreground(photo):
     """The sharp photo on a white rounded card, sized for the middle of the frame."""
     card_w = 900
-    p = ImageOps.contain(photo, (card_w - 60, 820), Image.LANCZOS)
+    p = ImageOps.contain(photo, (card_w - 60, 600), Image.LANCZOS)  # keeps the card clear of the feature pills
     card = Image.new("RGBA", (card_w, p.height + 60), (0, 0, 0, 0))
     ImageDraw.Draw(card).rounded_rectangle([0, 0, card_w - 1, card.height - 1], radius=40, fill=(255, 255, 255, 255))
     card.paste(p, ((card_w - p.width) // 2, 30))
@@ -84,6 +101,7 @@ def overlays(title, price, features, cta):
         f = font(78)
         y = 170
         for line in wrap(d, title, f, W - 140)[:3]:
+            line = vis(line)
             tw = d.textlength(line, font=f)
             d.text(((W - tw) / 2, y), line, font=f, fill="white", stroke_width=5, stroke_fill=(0, 0, 0))
             y += 92
@@ -91,7 +109,7 @@ def overlays(title, price, features, cta):
 
     f = font(50)
     for i, feat in enumerate(features[:4]):
-        def feat_layer(d, i=i, feat=feat):
+        def feat_layer(d, i=i, feat=vis(feat)):
             tw = d.textlength(feat, font=f)
             x, y = (W - tw - 80) / 2, 1240 + i * 92
             d.rounded_rectangle([x, y, x + tw + 80, y + 78], radius=39, fill=(15, 15, 18, 225))
@@ -100,7 +118,7 @@ def overlays(title, price, features, cta):
         out.append((layer(feat_layer), 2.0 + i * 0.9))
 
     if price:
-        def price_layer(d):
+        def price_layer(d, price=vis(price)):
             pf = font(96)
             tw = d.textlength(price, font=pf)
             x, y = (W - tw - 100) / 2, 1580
@@ -109,7 +127,7 @@ def overlays(title, price, features, cta):
         out.append((layer(price_layer), 2.0 + len(features[:4]) * 0.9 + 0.4))
 
     if cta:
-        def cta_layer(d):
+        def cta_layer(d, cta=vis(cta)):
             cf = font(58)
             tw = d.textlength(cta, font=cf)
             d.rectangle([0, H - 150, W, H], fill=(0, 0, 0, 170))
